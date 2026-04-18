@@ -1,0 +1,87 @@
+name: Build Signed APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      buildType:
+        description: 'Tipo de build (debug/release)'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+          - debug
+          - release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Permissão ao gradlew
+        run: chmod +x ./gradlew
+
+      - name: Criar keystore
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          # Verifica se os segredos existem
+          if [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
+            echo "❌ KEYSTORE_PASSWORD ou KEY_ALIAS não configurados"
+            exit 1
+          fi
+          
+          # Cria keystore
+          keytool -genkey -v -keystore app/keystore.jks \
+            -alias "$KEY_ALIAS" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=SonicSphere, OU=Development, O=SonicSphere, L=City, S=State, C=BR" \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -keypass "$KEYSTORE_PASSWORD" \
+            -noprompt
+          
+          echo "✅ Keystore criada em app/keystore.jks"
+          ls -la app/keystore.jks
+
+      - name: Clean
+        run: ./gradlew clean
+
+      - name: Build APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          if [ "${{ github.event.inputs.buildType }}" == "release" ]; then
+            echo "📦 Buildando RELEASE assinado..."
+            ./gradlew assembleRelease
+          else
+            echo "🔧 Buildando DEBUG..."
+            ./gradlew assembleDebug
+          fi
+        
+      - name: Listar arquivos gerados
+        run: |
+          echo "📁 APKs gerados:"
+          find app/build/outputs -name "*.apk" -o -name "*.aab" | while read f; do
+            echo "  - $f ($(du -h "$f" | cut -f1))"
+          done
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SonicSphere-${{ github.event.inputs.buildType }}
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
+          retention-days: 7
