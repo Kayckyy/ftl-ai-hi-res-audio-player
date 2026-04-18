@@ -29,31 +29,6 @@ jobs:
       - name: Permissão ao gradlew
         run: chmod +x ./gradlew
 
-      - name: Criar keystore
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-        run: |
-          # Verifica se os segredos existem
-          if [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
-            echo "❌ KEYSTORE_PASSWORD ou KEY_ALIAS não configurados"
-            exit 1
-          fi
-          
-          # Cria keystore
-          keytool -genkey -v -keystore app/keystore.jks \
-            -alias "$KEY_ALIAS" \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=SonicSphere, OU=Development, O=SonicSphere, L=City, S=State, C=BR" \
-            -storepass "$KEYSTORE_PASSWORD" \
-            -keypass "$KEYSTORE_PASSWORD" \
-            -noprompt
-          
-          echo "✅ Keystore criada em app/keystore.jks"
-          ls -la app/keystore.jks
-
       - name: Clean
         run: ./gradlew clean
 
